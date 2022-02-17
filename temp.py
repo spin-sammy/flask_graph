@@ -2,7 +2,8 @@ import pandas_ta as ta
 import config
 import pandas as pd
 import ccxt
-
+from datetime import datetime, time
+import time
 
 exchange_id = 'binance'
 exchange_class = getattr(ccxt, exchange_id)
@@ -14,8 +15,8 @@ exchange = exchange_class({
     'options': {'defaultType': 'future'},
 })
 
-pair = 'BTCUSDT'
-time_frame = '5m'
+pair = 'BCHUSDT'
+time_frame = '1m'
 candle_limit = 300
 bars = exchange.fetch_ohlcv(pair, timeframe=time_frame, limit=candle_limit)  # Выводит limit минутных свечей
 
@@ -28,17 +29,31 @@ sma = ta.sma(df['Close'], 8)
 ema = ta.ema(df['Close'], 15)
 atr = ta.atr(df['High'], df['Low'], df['Close'], 12)
 macd = ta.macd(df['Close'], 12, 24, 3)
-print(macd)
-print(st['SUPERT_'+str(st_window)+'_'+str(st_multi)+'.0'])
+#print(macd)
+#print(st['SUPERT_'+str(st_window)+'_'+str(st_multi)+'.0'])
 
-pos = exchange.fetch_balance()['info']['positions']
+#pos = exchange.fetch_balance()['info']['positions']
 
-print(pos)
+#print(pos)
 
-stopLossParams = {'closePosition': True, 'stopPrice': 0.8, 'reduce_only': True}
-exchange.create_order('XRPUSDT', 'STOP_MARKET', 'buy', 100, None, stopLossParams)
+# stopLossParams = {'closePosition': True, 'stopPrice': 0.8, 'reduce_only': True}
+# exchange.create_order('XRPUSDT', 'STOP_MARKET', 'buy', 100, None, stopLossParams)
+#
+# takeProfitParams = {'closePosition': True, 'stopPrice': 0.7722, 'reduce_only': True}
+# exchange.create_order('XRPUSDT', 'TAKE_PROFIT_MARKET', 'buy', 100, None, takeProfitParams)
+#
+# exchange.create_order('XRPUSDT', 'MARKET', 'sell', 100)
 
-takeProfitParams = {'closePosition': True, 'stopPrice': 0.7722, 'reduce_only': True}
-exchange.create_order('XRPUSDT', 'TAKE_PROFIT_MARKET', 'buy', 100, None, takeProfitParams)
+order = exchange.fetch_open_orders(pair)
 
-exchange.create_order('XRPUSDT', 'MARKET', 'sell', 100)
+print(order)
+print(len(order))
+
+t = int(str(datetime.now().time())[0:2])
+print(t)
+
+
+if t >= 4 and t <= 20:
+    print('Можно торговать!')
+else:
+    print('Торговать нельзя!')

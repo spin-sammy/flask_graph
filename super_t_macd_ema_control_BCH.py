@@ -151,13 +151,13 @@ def strategy():
     stop_price = df['St'][last_candle]
 
     # ПОКУПКИ / ПРОДАЖИ
-    if not sell_flag and not buy_flag: # Проверяем состояние флагов позиций
+    if not sell_flag and not buy_flag:  # Проверяем состояние флагов позиций
         # проверяем условия покупки инструмента
         if price > ema and ema_angle > ema_angle_limit \
                 and macd_s < macd < 0 \
                 and macd_h >= 0 \
-                and macd_h >= df['Macd_h'][last_candle-1] \
-                and st_d == 1: # Если всё совпало тогда - покупаем!
+                and macd_h >= df['Macd_h'][last_candle - 1] \
+                and st_d == 1:  # Если всё совпало тогда - покупаем!
             check_pos(pair_num)
 
             delta_price = abs(entry_price - stop_price)
@@ -237,6 +237,7 @@ def open_sell_market_order(pair, size, stop_price, take_price):
         print(f'Ошибка: {format(e)}')
         sell_flag = False
         return False
+
 
 old_time = str(datetime.now().time())
 read_pair_data(pair=pair)

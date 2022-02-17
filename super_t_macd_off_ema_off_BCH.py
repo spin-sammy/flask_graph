@@ -35,6 +35,7 @@ entry_price = 0
 take_price = 0
 stop_price = 0
 
+
 exchange_id = 'binance'
 exchange_class = getattr(ccxt, exchange_id)
 exchange = exchange_class({
@@ -151,25 +152,52 @@ def strategy():
     stop_price = df['St'][last_candle]
 
     # ПОКУПКИ / ПРОДАЖИ
-    if not sell_flag and not buy_flag: # Проверяем состояние флагов позиций
+    if not sell_flag and not buy_flag:  # Проверяем состояние флагов позиций
         # проверяем условия покупки инструмента
         if price > ema and ema_angle > ema_angle_limit \
-                and macd_s < macd < 0 \
-                and macd_h >= 0 \
-                and macd_h >= df['Macd_h'][last_candle-1] \
-                and st_d == 1: # Если всё совпало тогда - покупаем!
+                and macd_h >= df['Macd_h'][last_candle - 1] \
+                and st_d == 1:  # Если всё совпало тогда - покупаем!
             check_pos(pair_num)
-
             delta_price = abs(entry_price - stop_price)
             take_price = entry_price + (delta_price * 2)
             print(f'Точка входа {entry_price}')
             print(f'Стоп-лосс {stop_price}')
             print(f'Тейк-профит {take_price}')
-            print('Покупаем !!!!!!!!!!!!!!!!!!!!!!')
+            print('Покупаем! Без нулевой линии!')
+            open_buy_market_order(pair, size, stop_price, take_price)
+
+        # Если мы находимся в боковике, т.е. угол наклона ЕМА ничтожно мал,
+        # меньше установленного лимита
+        elif ema_angle < ema_angle_limit \
+                and macd_s < macd < 0 \
+                and macd_h >= 0 \
+                and macd_h >= df['Macd_h'][last_candle - 1] \
+                and st_d == 1:  # Если всё совпало тогда - покупаем!
+            check_pos(pair_num)
+            delta_price = abs(entry_price - stop_price)
+            take_price = entry_price + (delta_price * 2)
+            print(f'Точка входа {entry_price}')
+            print(f'Стоп-лосс {stop_price}')
+            print(f'Тейк-профит {take_price}')
+            print('Покупаем ! Без ЕМА!')
             open_buy_market_order(pair, size, stop_price, take_price)
 
         # проверяем условия продажи инструмента
         if price < ema and ema_angle > ema_angle_limit \
+                and macd_h <= df['Macd_h'][last_candle - 1] \
+                and st_d == -1:  # Если всё совпало тогда - продаем!
+            check_pos(pair_num)
+            delta_price = abs(entry_price - stop_price)
+            take_price = entry_price - (delta_price * 2)
+            print(f'Точка входа {entry_price}')
+            print(f'Стоп-лосс {stop_price}')
+            print(f'Тейк-профит {take_price}')
+            print('Продаем ! Без нулевой линии!')
+            open_sell_market_order(pair, size, stop_price, take_price)
+
+        # Если мы находимся в боковике, т.е. угол наклона ЕМА ничтожно мал,
+        # меньше установленного лимита
+        elif ema_angle < ema_angle_limit \
                 and macd_s > macd > 0 \
                 and macd_h <= 0 \
                 and macd_h <= df['Macd_h'][last_candle - 1] \
@@ -180,7 +208,7 @@ def strategy():
             print(f'Точка входа {entry_price}')
             print(f'Стоп-лосс {stop_price}')
             print(f'Тейк-профит {take_price}')
-            print('Продаем !!!!!!!!!!!!!!!!!!!!!!')
+            print('Продаем ! Без ЕМА!')
             open_sell_market_order(pair, size, stop_price, take_price)
 
 
@@ -237,6 +265,7 @@ def open_sell_market_order(pair, size, stop_price, take_price):
         print(f'Ошибка: {format(e)}')
         sell_flag = False
         return False
+
 
 old_time = str(datetime.now().time())
 read_pair_data(pair=pair)

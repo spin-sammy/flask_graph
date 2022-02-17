@@ -10,14 +10,14 @@ pair = 'BCHUSDT'
 time_frame = '1m'
 pair_num = 0
 candle_limit = 201
-SMA_window = 21
-EMA_window = 201
+SMA_window = 36
+EMA_window = 200
 ATR_window = 5
 CCI_window = 50
 ST_window = 10
 ST_multi = 3.0
-ST_window2 = 5
-ST_multi2 = 3.0
+ST_window2 = 20
+ST_multi2 = 4.2
 MACD_fast = 12
 MACD_slow = 26
 MACD_signal = 9
@@ -27,13 +27,16 @@ max_i_w = 0
 delta_df = 0
 sell_flag = False
 buy_flag = False
-size = 0.2
-ema_angle = 0
-ema_angle_limit = 0.3
-ema_angle_candles = 20
+size = 0.0
+pos_amt = 0
+sma_angle = 0
+sma_angle_limit = 0.5
+sma_angle_candles = 20
 entry_price = 0
 take_price = 0
 stop_price = 0
+profit_factor = 2
+risk = 0.01
 
 exchange_id = 'binance'
 exchange_class = getattr(ccxt, exchange_id)
@@ -46,6 +49,12 @@ exchange = exchange_class({
 })
 
 pos = exchange.fetch_balance()['info']['positions']  # Читаем позиции по всем доступным парам
+
+print('Баланс USDT: {}'.format(exchange.fetch_balance()['USDT']['total']))# Выводит баланс фьючерсного кошелька в USDT/BUSD/BNB
+print('Свободно: {}'.format(exchange.fetch_balance()['USDT']['free']))# 'total' - всего, 'free' - свободно, 'used' - используется
+print('Используется: {}'.format(exchange.fetch_balance()['USDT']['used']))
+print('-' * 30)
+#risk = float(input('Введите риск _> '))
 
 for i in range(len(pos)):  # Находим нужную нам пару в списке pos[n]
     if pos[i]['symbol'] == pair:
@@ -105,9 +114,9 @@ def read_pair_data(pair):  # ЧИТАЕМ ДАННЫЕ ПАРЫ
     # -------------------------------------------------------------------------------------------
 
     # Индикатор тренда Supertrend _--------------------------------------------------------------
-    st = ta.supertrend(df_i['High'], df_i['Low'], df_i['Close'], ST_window2, ST_multi2)
-    df_i['St2'] = st['SUPERT_' + str(ST_window2) + '_' + str(ST_multi2)]
-    df_i['St_d2'] = st['SUPERTd_' + str(ST_window2) + '_' + str(ST_multi2)]
+    st2 = ta.supertrend(df_i['High'], df_i['Low'], df_i['Close'], ST_window2, ST_multi2)
+    df_i['St2'] = st2['SUPERT_' + str(ST_window2) + '_' + str(ST_multi2)]
+    df_i['St_d2'] = st2['SUPERTd_' + str(ST_window2) + '_' + str(ST_multi2)]
     # -------------------------------------------------------------------------------------------
 
     df = df_i[delta_df:]  # Формируем срез и df_i (индикаторный датафрейм)
@@ -116,32 +125,53 @@ def read_pair_data(pair):  # ЧИТАЕМ ДАННЫЕ ПАРЫ
 
 
 def check_pos(pair_num):
-    global buy_flag, sell_flag, pos, df, entry_price
+    global buy_flag, sell_flag, pos, df, entry_price, pos_amt
     pos = exchange.fetch_balance()['info']['positions'][pair_num]
-
-    if float(pos['positionAmt']) == 0:
+    pos_amt = float(pos['positionAmt'])
+    if pos_amt == 0:
         exchange.cancelAllOrders(pair)
         sell_flag, buy_flag = False, False
 
-    if float(pos['positionAmt']) > 0:
+    if pos_amt > 0:
         buy_flag = True
         entry_price = pos['entryPrice']
-        print(f'Точка входа в покупки ▲ {entry_price}')
-        print(f'Профит: {pos["unrealizedProfit"]}')
+        print(f'\r ТВХ ▲ {entry_price} Профит: {round(float(pos["unrealizedProfit"]), 2)} угол: {round(sma_angle, 3)}',
+              end='', flush=True)
 
-    if float(pos['positionAmt']) < 0:
+    if pos_amt < 0:
         sell_flag = True
         entry_price = pos['entryPrice']
-        print(f'Точка входа в продажи ▼ {entry_price}')
-        print(f'Профит: {pos["unrealizedProfit"]}')
+        print(f'\r ТВХ ▼ {entry_price} Профит: {round(float(pos["unrealizedProfit"]), 2)} угол: {round(sma_angle, 3)}',
+              end='', flush=True)
 
+    if profit_factor == 2 and pos_amt != 0:
+        ohlcv = exchange.fetch_ohlcv(pair, time_frame)
+        price = ohlcv[-1][4]
+        if pos_amt > 0:
+            if sma_angle < sma_angle_limit - sma_angle_limit * .2:
+                exchange.create_order(pair, 'MARKET', 'sell', abs(pos_amt))
+                time.sleep(0.2)
+                print()
+                print(f'Позиция закрыта {str(datetime.now().time())[:8]}')
+                pos_amt = float(pos['positionAmt'])
+
+        elif pos_amt < 0:
+            if sma_angle < sma_angle_limit - sma_angle_limit * .2:
+                exchange.create_order(pair, 'MARKET', 'buy', abs(pos_amt))
+                time.sleep(0.2)
+                print()
+                print(f'Позиция закрыта {str(datetime.now().time())[:8]}')
+                pos_amt = float(pos['positionAmt'])
 
 def strategy():
-    global buy_flag, sell_flag, ema_angle, size, df, df_i, entry_price, stop_price, take_price
+    global buy_flag, sell_flag, sma_angle, size, df, df_i, entry_price, profit_factor
     last_candle = candle_limit - 1
-    ema_angle = max(df_i['Ema'][-ema_angle_candles:]) - min(df_i['Ema'][-ema_angle_candles:])
-    print(f'Угол наклона (условно): {ema_angle} за {ema_angle_candles} свечей, порог: {ema_angle_limit}')
-    ema = df['Ema'][last_candle]
+    sma_angle = max(df_i['Sma'][-sma_angle_candles:]) - min(df_i['Sma'][-sma_angle_candles:])
+    sma_direct = None
+    if float(pos['positionAmt']) == 0:
+        print(f'\r Угол: {round(sma_angle,5)} за {sma_angle_candles} свечей, порог: {round(sma_angle_limit, 4)} ', end='', flush=True)
+    sma = df['Sma'][last_candle]
+    old_sma = df['Sma'][last_candle-1]
     macd = df['Macd'][last_candle]
     macd_h = df['Macd_h'][last_candle]
     macd_s = df['Macd_s'][last_candle]
@@ -150,93 +180,75 @@ def strategy():
     price = df['Close'][last_candle]
     stop_price = df['St'][last_candle]
 
-    # ПОКУПКИ / ПРОДАЖИ
-    if not sell_flag and not buy_flag: # Проверяем состояние флагов позиций
-        # проверяем условия покупки инструмента
-        if price > ema and ema_angle > ema_angle_limit \
-                and macd_s < macd < 0 \
-                and macd_h >= 0 \
-                and macd_h >= df['Macd_h'][last_candle-1] \
-                and st_d == 1: # Если всё совпало тогда - покупаем!
-            check_pos(pair_num)
+    if sma > old_sma:
+        sma_direct = 1
+    else:
+        sma_direct = -1
 
-            delta_price = abs(entry_price - stop_price)
-            take_price = entry_price + (delta_price * 2)
-            print(f'Точка входа {entry_price}')
-            print(f'Стоп-лосс {stop_price}')
-            print(f'Тейк-профит {take_price}')
-            print('Покупаем !!!!!!!!!!!!!!!!!!!!!!')
-            open_buy_market_order(pair, size, stop_price, take_price)
+    # ПОКУПКИ / ПРОДАЖИ
+    if not sell_flag and not buy_flag:  # Проверяем состояние флагов позиций
+        # проверяем условия покупки инструмента
+        if sma_angle > sma_angle_limit and sma_direct == 1:
+            profit_factor = 2
+            check_pos(pair_num)
+            free_balance = float(exchange.fetch_balance()['USDT']['free'])
+            size = free_balance * risk
+            print()
+            print(str(datetime.now().time())[:8])
+            print(f'Точка входа {round(entry_price, 6)}')
+            print(f'Размер позиции {round(size, 6)}')
+            print('Покупаем ↑ ↑ ↑')
+            open_buy_market_order(pair, size)
 
         # проверяем условия продажи инструмента
-        if price < ema and ema_angle > ema_angle_limit \
-                and macd_s > macd > 0 \
-                and macd_h <= 0 \
-                and macd_h <= df['Macd_h'][last_candle - 1] \
-                and st_d == -1:  # Если всё совпало тогда - продаем!
+        if sma_angle > sma_angle_limit and sma_direct == -1:
+            profit_factor = 2
             check_pos(pair_num)
-            delta_price = abs(entry_price - stop_price)
-            take_price = entry_price - (delta_price * 2)
-            print(f'Точка входа {entry_price}')
-            print(f'Стоп-лосс {stop_price}')
-            print(f'Тейк-профит {take_price}')
-            print('Продаем !!!!!!!!!!!!!!!!!!!!!!')
-            open_sell_market_order(pair, size, stop_price, take_price)
+            free_balance = float(exchange.fetch_balance()['USDT']['free'])
+            size = free_balance * risk
+            print()
+            print(str(datetime.now().time())[:8])
+            print(f'Точка входа {round(float(entry_price), 6)}')
+            print(f'Размер позиции {round(size, 6)}')
+            print('Продаем ↓ ↓ ↓')
+            open_sell_market_order(pair, size)
 
-
-def open_buy_market_order(pair, size, stop_price, take_price):
+def open_buy_market_order(pair, size):
     global buy_flag
     try:
-        stopLossParams = {'closePosition': True, 'stopPrice': stop_price, 'reduce_only': True}
-        stop_order = exchange.create_order(pair, 'STOP_MARKET', 'sell', size, None, stopLossParams)
-        print(f'Успешно установлен стоп-ордер {stop_price}.')
-        print(stop_order)
-
-        takeProfitParams = {'closePosition': True, 'stopPrice': take_price, 'reduce_only': True}
-        take_order = exchange.create_order(pair, 'TAKE_PROFIT_MARKET', 'sell', size, None, takeProfitParams)
-        print(f'Успешно установлен тейк-профит {take_price}.')
-        print(take_order)
-
         order = exchange.create_order(pair, 'MARKET', 'buy', size)
-        print(f'Позиция BUY {pair} успешно открыта.')
-        print(order)
+        print(str(datetime.now().time())[:8])
+        print(f'Позиция BUY {pair} успешно открыта')
 
         buy_flag = True
         return True
 
     except Exception as e:
         exchange.cancelAllOrders(pair)
+        print(str(datetime.now().time())[:8])
         print('Не удалось открыть позицию на покупку!')
         print(f'Ошибка: {format(e)}')
         buy_flag = False
         return False
 
 
-def open_sell_market_order(pair, size, stop_price, take_price):
+def open_sell_market_order(pair, size):
     global sell_flag
     try:
-        stopLossParams = {'closePosition': True, 'stopPrice': stop_price, 'reduce_only': True}
-        stop_order = exchange.create_order(pair, 'STOP_MARKET', 'buy', size, None, stopLossParams)
-        print(f'Успешно установлен стоп-ордер {stop_price}.')
-        print(stop_order)
-
-        takeProfitParams = {'closePosition': True, 'stopPrice': take_price, 'reduce_only': True}
-        take_order = exchange.create_order(pair, 'TAKE_PROFIT_MARKET', 'buy', size, None, takeProfitParams)
-        print(f'Успешно установлен тейк-профит {take_price}.')
-        print(take_order)
-
         order = exchange.create_order(pair, 'MARKET', 'sell', size)
-        print(f'Позиция SELL {pair} успешно открыта.')
-        print(order)
+        print(str(datetime.now().time())[:8])
+        print(f'Позиция SELL {pair} успешно открыта')
         sell_flag = True
         return True
 
     except Exception as e:
         exchange.cancelAllOrders(pair)
+        print(str(datetime.now().time())[:8])
         print('Не удалось открыть позицию на продажу!')
         print(f'Ошибка: {format(e)}')
         sell_flag = False
         return False
+
 
 old_time = str(datetime.now().time())
 read_pair_data(pair=pair)
@@ -247,6 +259,6 @@ while True:
     if current_time[4] != old_time[4]:  # Читаем данные инструмента каждую минуту
         read_pair_data(pair=pair)
         old_time = current_time
+        strategy()
     check_pos(pair_num)
-    print(f'sell_flag = {sell_flag}, buy_flag = {buy_flag}')
-    strategy()
+

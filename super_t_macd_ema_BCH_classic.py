@@ -153,7 +153,7 @@ def strategy():
     # ПОКУПКИ / ПРОДАЖИ
     if not sell_flag and not buy_flag: # Проверяем состояние флагов позиций
         # проверяем условия покупки инструмента
-        if price > ema and ema_angle > ema_angle_limit \
+        if price > ema \
                 and macd_s < macd < 0 \
                 and macd_h >= 0 \
                 and macd_h >= df['Macd_h'][last_candle-1] \
@@ -167,9 +167,8 @@ def strategy():
             print(f'Тейк-профит {take_price}')
             print('Покупаем !!!!!!!!!!!!!!!!!!!!!!')
             open_buy_market_order(pair, size, stop_price, take_price)
-
         # проверяем условия продажи инструмента
-        if price < ema and ema_angle > ema_angle_limit \
+        if price < ema \
                 and macd_s > macd > 0 \
                 and macd_h <= 0 \
                 and macd_h <= df['Macd_h'][last_candle - 1] \
