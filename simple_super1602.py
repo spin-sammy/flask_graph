@@ -32,6 +32,7 @@ pos_amt = 0
 sma_angle = 0
 sma_angle_limit = 0.5
 sma_angle_candles = 20
+sma_direct = 0
 entry_price = 0
 take_price = 0
 stop_price = 0
@@ -148,7 +149,9 @@ def check_pos(pair_num):
         ohlcv = exchange.fetch_ohlcv(pair, time_frame)
         price = ohlcv[-1][4]
         if pos_amt > 0:
-            if sma_angle < sma_angle_limit - sma_angle_limit * .2:
+            if sma_angle < sma_angle_limit - sma_angle_limit * .2 \
+                    or sma_angle > sma_angle_limit * 4 \
+                    or sma_direct == -1:
                 exchange.create_order(pair, 'MARKET', 'sell', abs(pos_amt))
                 time.sleep(0.2)
                 print()
@@ -156,7 +159,9 @@ def check_pos(pair_num):
                 pos_amt = float(pos['positionAmt'])
 
         elif pos_amt < 0:
-            if sma_angle < sma_angle_limit - sma_angle_limit * .2:
+            if sma_angle < sma_angle_limit - sma_angle_limit * .2 \
+                    or sma_angle > sma_angle_limit * 4 \
+                    or sma_direct == 1:
                 exchange.create_order(pair, 'MARKET', 'buy', abs(pos_amt))
                 time.sleep(0.2)
                 print()
@@ -164,7 +169,7 @@ def check_pos(pair_num):
                 pos_amt = float(pos['positionAmt'])
 
 def strategy():
-    global buy_flag, sell_flag, sma_angle, size, df, df_i, entry_price, profit_factor
+    global buy_flag, sell_flag, sma_angle, sma_direct, size, df, df_i, entry_price, profit_factor
     last_candle = candle_limit - 1
     sma_angle = max(df_i['Sma'][-sma_angle_candles:]) - min(df_i['Sma'][-sma_angle_candles:])
     sma_direct = None
@@ -188,7 +193,7 @@ def strategy():
     # ПОКУПКИ / ПРОДАЖИ
     if not sell_flag and not buy_flag:  # Проверяем состояние флагов позиций
         # проверяем условия покупки инструмента
-        if sma_angle > sma_angle_limit and sma_direct == 1:
+        if sma_angle > sma_angle_limit and sma_direct == 1 and sma_angle < sma_angle_limit * 2:
             profit_factor = 2
             check_pos(pair_num)
             free_balance = float(exchange.fetch_balance()['USDT']['free'])
@@ -201,7 +206,7 @@ def strategy():
             open_buy_market_order(pair, size)
 
         # проверяем условия продажи инструмента
-        if sma_angle > sma_angle_limit and sma_direct == -1:
+        if sma_angle > sma_angle_limit and sma_direct == -1 and sma_angle < sma_angle_limit * 2:
             profit_factor = 2
             check_pos(pair_num)
             free_balance = float(exchange.fetch_balance()['USDT']['free'])
